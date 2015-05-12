@@ -249,8 +249,6 @@ namespace Squirrel.Update
           using (var mgr = new UpdateManager(updateUrl, appName, FrameworkVersion.Net45)) {
             var updateInfo = await mgr.CheckForUpdate(progress: x => Console.WriteLine(x / 3));
 
-            var releaseNotes = updateInfo.FetchReleaseNotes();
-
             var sanitizedUpdateInfo = new
             {
               currentVersion = updateInfo.CurrentlyInstalledVersion != null ? updateInfo.CurrentlyInstalledVersion.Version.ToString() : "",
@@ -258,7 +256,7 @@ namespace Squirrel.Update
               releasesToApply = updateInfo.ReleasesToApply.Select(x => new
               {
                 version = x.Version.ToString(),
-                releaseNotes = releaseNotes.ContainsKey(x) ? releaseNotes[x] : "",
+                releaseNotes = "", // releaseNotes require we've downloaded the package already. In this case, we have not.
               }).ToArray(),
             };
 
