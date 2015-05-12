@@ -589,6 +589,7 @@ namespace Squirrel
             var path = Path.Combine(Path.GetTempPath(), ".squirrel-lock-" + key);
 
             var st = new Stopwatch();
+            this.Log().Info("Grabbing lockfile with timeout of " + timeOut);
             st.Start();
 
             var fh = default(FileStream);

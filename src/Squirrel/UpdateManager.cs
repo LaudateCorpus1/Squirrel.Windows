@@ -230,7 +230,7 @@ namespace Squirrel
                 IDisposable theLock;
                 try {
                     theLock = ModeDetector.InUnitTestRunner() ?
-                        Disposable.Create(() => {}) : new SingleGlobalInstance(key, TimeSpan.FromMilliseconds(2000));
+                        Disposable.Create(() => {}) : new SingleGlobalInstance(key, TimeSpan.FromMilliseconds(10000));
                 } catch (TimeoutException) {
                     throw new TimeoutException("Couldn't acquire update lock, another instance may be running updates");
                 }
