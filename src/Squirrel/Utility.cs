@@ -210,6 +210,8 @@ namespace Squirrel
                     textResult = String.Empty;
                 }
             }
+
+            Log().Debug("Received exitcode {0} from process {1}", pi.ExitCode, psi.FileName);
             return Tuple.Create(pi.ExitCode, textResult.Trim());
         }
 

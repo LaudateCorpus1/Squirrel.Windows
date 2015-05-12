@@ -117,8 +117,21 @@ namespace Squirrel
 
                 fixPinnedExecutables(new Version(255, 255, 255, 255));
 
-                await this.ErrorIfThrows(() => Utility.DeleteDirectoryWithFallbackToNextReboot(rootAppDirectory),
-                    "Failed to delete app directory: " + rootAppDirectory);
+                bool didSucceedDeleting = false;
+                const int retryAttempts = 10;
+                for (int i = 0; i < retryAttempts; ++i) {
+                    try {
+                        await Utility.DeleteDirectory(rootAppDirectory);
+                        didSucceedDeleting = true;
+                    } catch (Exception) {
+                        Thread.Sleep(1000); // Give the OS a second to release handles and we'll try again
+                    }
+                }
+
+                if (!didSucceedDeleting) {
+                    await this.ErrorIfThrows(() => Utility.DeleteDirectoryWithFallbackToNextReboot(rootAppDirectory),
+                        "Failed to delete app directory: " + rootAppDirectory);
+                }
             }
 
             public void CreateShortcutsForExecutable(string exeName, ShortcutLocation locations, bool updateOnly)
