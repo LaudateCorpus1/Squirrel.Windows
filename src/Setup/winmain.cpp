@@ -5,6 +5,8 @@
 #include "Setup.h"
 #include "FxHelper.h"
 #include "UpdateRunner.h"
+#include "MachineInstaller.h"
+#include <cstdio>
 
 CAppModule _Module;
 
@@ -14,14 +16,47 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                       _In_ int nCmdShow)
 {
 	int exitCode = -1;
+	CString cmdLine(lpCmdLine);
+
+	if (cmdLine.Find(L"--checkInstall") >= 0) {
+		// If we're already installed, exit as fast as possible
+		if (!MachineInstaller::ShouldSilentInstall()) {
+			exitCode = 0;
+			goto out;
+		}
+
+		// Make sure update.exe gets silent
+		wcscat(lpCmdLine, L" --silent");
+	}
+
 	HRESULT hr = ::CoInitialize(NULL);
 	ATLASSERT(SUCCEEDED(hr));
 
 	AtlInitCommonControls(ICC_COOL_CLASSES | ICC_BAR_CLASSES);
 	hr = _Module.Init(NULL, hInstance);
 
-	CString cmdLine(lpCmdLine);
 	bool isQuiet = (cmdLine.Find(L"-s") >= 0);
+	bool weAreUACElevated = CUpdateRunner::AreWeUACElevated() == S_OK;
+	bool explicitMachineInstall = (cmdLine.Find(L"--machine") >= 0);
+
+	if (explicitMachineInstall || weAreUACElevated) {
+		exitCode = MachineInstaller::PerformMachineInstallSetup();
+		if (exitCode != 0) goto out;
+		isQuiet = true;
+
+		// Make sure update.exe gets silent
+		if (explicitMachineInstall) {
+			wcscat(lpCmdLine, L" --silent");
+			printf("Machine-wide installation was successful! Users will see the app once they log out / log in again.\n");
+		}
+	}
+
+	if (!CFxHelper::CanInstallDotNet4_5()) {
+		// Explain this as nicely as possible and give up.
+		MessageBox(0L, L"This program cannot run on Windows XP or before; it requires a later version of Windows.", L"Incompatible Operating System", 0);
+		exitCode = E_FAIL;
+		goto out;
+	}
 
 	if (!CFxHelper::IsDotNet45OrHigherInstalled()) {
 		hr = CFxHelper::InstallDotNetFramework(isQuiet);
@@ -37,11 +72,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		}
 	}
 
-	hr = CUpdateRunner::AreWeUACElevated();
-
 	// If we're UAC-elevated, we shouldn't be because it will give us permissions
 	// problems later. Just silently rerun ourselves.
-	if (hr == S_OK) {
+	if (weAreUACElevated) {
 		wchar_t buf[4096];
 		HMODULE hMod = GetModuleHandle(NULL);
 		GetModuleFileNameW(hMod, buf, 4096);
