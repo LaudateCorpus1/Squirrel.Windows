@@ -329,6 +329,7 @@ namespace Squirrel.Update
             targetDir = targetDir ?? ".\\Releases";
             packagesDir = packagesDir ?? ".";
             bootstrapperExe = bootstrapperExe ?? ".\\Setup.exe";
+            var baseName = Path.GetFileNameWithoutExtension(package).Split('.')[0];
 
             if (!Directory.Exists(targetDir)) {
                 Directory.CreateDirectory(targetDir);
@@ -389,7 +390,7 @@ namespace Squirrel.Update
             var releaseEntries = distinctPreviousReleases.Concat(newReleaseEntries).ToList();
             ReleaseEntry.WriteReleaseFile(releaseEntries, releaseFilePath);
 
-            var targetSetupExe = Path.Combine(di.FullName, "Setup.exe");
+            var targetSetupExe = Path.Combine(di.FullName, baseName + "Setup.exe");
             var newestFullRelease = releaseEntries.MaxBy(x => x.Version).Where(x => !x.IsDelta).First();
 
             File.Copy(bootstrapperExe, targetSetupExe, true);
