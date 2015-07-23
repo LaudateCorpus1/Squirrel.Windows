@@ -82,6 +82,7 @@ int MachineInstaller::PerformMachineInstallSetup()
 	attrs.lpSecurityDescriptor = descriptor;
 
 	if (!CreateDirectory(machineInstallFolder, &attrs) && GetLastError() != ERROR_ALREADY_EXISTS) {
+        wprintf(L"error creating machine dir %s: 0x%08x\n", machineInstallFolder, GetLastError());
 		LocalFree(descriptor);
 		return GetLastError();
 	}
@@ -97,19 +98,25 @@ int MachineInstaller::PerformMachineInstallSetup()
 	GetModuleFileName(hMod, ourFile, _countof(ourFile));
 
 	if (!CopyFile(ourFile, machineInstallFolder, false)) {
+        DWORD err = GetLastError();
+        wprintf(L"error copying %s to %s\n", ourFile, machineInstallFolder);
 		return GetLastError();
 	}
 
 	HKEY runKey;
 	DWORD dontcare;
-	if (RegCreateKeyEx(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", 0, NULL, 0, KEY_ALL_ACCESS, NULL, &runKey, &dontcare) != ERROR_SUCCESS) {
-		return GetLastError();
+    LONG res = RegCreateKeyEx(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", 0, NULL, 0, KEY_ALL_ACCESS, NULL, &runKey, &dontcare);
+	if (res != ERROR_SUCCESS) {
+        printf("error creating registry key: 0x%08x\n", res);
+        return res;
 	}
 
 	wcscat_s(machineInstallFolder, L" --checkInstall");
 
-	if (RegSetValueEx(runKey, packageName, 0, REG_SZ, (BYTE*)machineInstallFolder, (wcsnlen(machineInstallFolder, sizeof(machineInstallFolder)) + 1) * sizeof(wchar_t)) != ERROR_SUCCESS) {
-		return GetLastError();
+    res = RegSetValueEx(runKey, packageName, 0, REG_SZ, (BYTE*)machineInstallFolder, (wcsnlen(machineInstallFolder, sizeof(machineInstallFolder)) + 1) * sizeof(wchar_t));
+	if (res != ERROR_SUCCESS) {
+        printf("error setting registry key value: 0x%08x\n", res);
+		return res;
 	}
 
 	RegCloseKey(runKey);

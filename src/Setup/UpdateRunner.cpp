@@ -53,6 +53,7 @@ HRESULT CUpdateRunner::AreWeUACElevated()
 	}
 
 	hr = (elevType == TokenElevationTypeFull ? S_OK : S_FALSE);
+    printf("Elevated process: %d\n", hr);
 
 out:
 	if (hToken) {

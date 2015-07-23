@@ -18,9 +18,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	int exitCode = -1;
 	CString cmdLine(lpCmdLine);
 
+    printf("Start up installer\n");
+
 	if (cmdLine.Find(L"--checkInstall") >= 0) {
 		// If we're already installed, exit as fast as possible
 		if (!MachineInstaller::ShouldSilentInstall()) {
+            printf("Already installed; peace out\n");
 			exitCode = 0;
 			goto out;
 		}
@@ -40,6 +43,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	bool explicitMachineInstall = (cmdLine.Find(L"--machine") >= 0);
 
 	if (explicitMachineInstall || weAreUACElevated) {
+        printf("want machine install\n");
+
 		exitCode = MachineInstaller::PerformMachineInstallSetup();
 		if (exitCode != 0) goto out;
 		isQuiet = true;

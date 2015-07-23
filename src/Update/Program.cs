@@ -489,7 +489,9 @@ namespace Squirrel.Update
                 throw new ArgumentException();
             }
 
-            if (shouldWait) waitForParentToExit();
+            if (shouldWait) {
+                waitForParentToExit();
+            }
 
             try {
                 this.Log().Info("About to launch: '{0}': {1}", targetExe.FullName, arguments ?? "");
