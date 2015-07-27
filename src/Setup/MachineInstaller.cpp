@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "unzip.h"
 #include "MachineInstaller.h"
-#include "resource.h"
+#include "Setup.h"
 #include <sddl.h>
 
 bool findPackageFromEmbeddedZip(wchar_t* buf, DWORD cbSize) 

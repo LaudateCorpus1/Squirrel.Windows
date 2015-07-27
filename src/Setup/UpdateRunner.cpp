@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "unzip.h"
-#include "Resource.h"
+#include "Setup.h"
 #include "UpdateRunner.h"
 #include <vector>
 

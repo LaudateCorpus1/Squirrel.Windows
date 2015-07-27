@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "FxHelper.h"
-#include "resource.h"
+#include "Setup.h"
 
 // http://msdn.microsoft.com/en-us/library/hh925568(v=vs.110).aspx#net_b
 static const wchar_t* ndpPath = L"SOFTWARE\\Microsoft\\NET Framework Setup\\NDP\\v4\\Full";
