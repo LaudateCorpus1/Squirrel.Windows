@@ -7,6 +7,7 @@
 #include "UpdateRunner.h"
 #include "MachineInstaller.h"
 #include <cstdio>
+#include <cstdarg>
 
 CAppModule _Module;
 
@@ -18,12 +19,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	int exitCode = -1;
 	CString cmdLine(lpCmdLine);
 
-    printf("Start up installer\n");
+    LogMessage(false, L"Start up installer: %s", lpCmdLine);
 
 	if (cmdLine.Find(L"--checkInstall") >= 0) {
 		// If we're already installed, exit as fast as possible
 		if (!MachineInstaller::ShouldSilentInstall()) {
-            printf("Already installed; peace out\n");
+            LogMessage(false, L"Already installed");
 			exitCode = 0;
 			goto out;
 		}
@@ -43,7 +44,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	bool explicitMachineInstall = (cmdLine.Find(L"--machine") >= 0);
 
 	if (explicitMachineInstall || weAreUACElevated) {
-        printf("want machine install\n");
+        LogMessage(false, L"Want machine install");
 
 		exitCode = MachineInstaller::PerformMachineInstallSetup();
 		if (exitCode != 0) goto out;
@@ -52,9 +53,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		// Make sure update.exe gets silent
 		if (explicitMachineInstall) {
 			wcscat(lpCmdLine, L" --silent");
-			printf("Machine-wide installation was successful! Users will see the app once they log out / log in again.\n");
+            LogMessage(false, L"Machine-wide installation was successful! Users will see the app once they log out / log in again.");
 		}
-	}
+    }
+    else {
+        LogMessage(false, L"Want standard install");
+    }
 
 	if (!CFxHelper::CanInstallDotNet4_5()) {
 		// Explain this as nicely as possible and give up.
@@ -84,6 +88,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		HMODULE hMod = GetModuleHandle(NULL);
 		GetModuleFileNameW(hMod, buf, 4096);
 
+        LogMessage(false, L"we are UAC elevated, so restart %s, %s\n", buf, lpCmdLine);
+
 		CUpdateRunner::ShellExecuteFromExplorer(buf, lpCmdLine);
 		exitCode = 0;
 		goto out;
@@ -95,4 +101,31 @@ out:
 	_Module.Term();
 	::CoUninitialize();
 	return exitCode;
+}
+
+void LogMessage(bool showMessageBox, const wchar_t* fmt, ...)
+{
+    wchar_t buff[1024];
+    va_list args;
+    va_start(args, fmt);
+    _vsnwprintf(buff, sizeof(buff), fmt, args);
+    va_end(args);
+    OutputDebugString(buff);
+    const char* tempDir = getenv("TEMP");
+    if (tempDir) {
+        char path[MAX_PATH];
+        sprintf(path, "%s\\SquirrelSetup.log", tempDir);
+        FILE* f = fopen(path, "a");
+        if (f) {
+            char cbuff[2048];
+            size_t len = wcstombs(cbuff, buff, sizeof(cbuff)-2);
+            cbuff[len++] = '\n';
+            cbuff[len] = 0;
+            fwrite(cbuff, 1, len, f);
+            fclose(f);
+        }
+    }
+    if (showMessageBox) {
+        MessageBox(NULL, buff, L"Installer", MB_OK);
+    }
 }

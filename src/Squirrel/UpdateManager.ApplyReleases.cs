@@ -531,13 +531,13 @@ namespace Squirrel
                 string originalVersionFolder = null;
                 if (originalVersion != null) {
                     originalVersionFolder = getDirectoryForRelease(originalVersion).Name;
-                    this.Log().Info("cleanDeadVersions: exclude folder {0}", originalVersionFolder);
+                    this.Log().Info("cleanDeadVersions: exclude original version folder {0}", originalVersionFolder);
                 }
 
                 string currentVersionFolder = null;
                 if (currentVersion != null) {
                     currentVersionFolder = getDirectoryForRelease(currentVersion).Name;
-                    this.Log().Info("cleanDeadVersions: exclude folder {0}", currentVersionFolder);
+                    this.Log().Info("cleanDeadVersions: exclude current version folder {0}", currentVersionFolder);
                 }
 
                 // NB: If we try to access a directory that has already been 
