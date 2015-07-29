@@ -33,14 +33,20 @@ namespace Squirrel
 
                 bool shouldInitialize = false;
                 try {
-                    localReleases = Utility.LoadLocalReleases(localReleaseFile);
+                    if (File.Exists(localReleaseFile)) {
+                        localReleases = Utility.LoadLocalReleases(localReleaseFile);
+                    } else {
+                        shouldInitialize = true;
+                    }
                 } catch (Exception ex) {
                     // Something has gone pear-shaped, let's start from scratch
                     this.Log().WarnException("Failed to load local releases, starting from scratch", ex);
                     shouldInitialize = true;
                 }
 
-                if (shouldInitialize) await initializeClientAppDirectory();
+                if (shouldInitialize) {
+                    await initializeClientAppDirectory();
+                }
 
                 string releaseFile;
 
