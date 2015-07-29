@@ -35,6 +35,14 @@ namespace Squirrel
                 await this.WarnIfThrows(() => wc.DownloadFileTaskAsync(failedUrl ?? url, targetFile),
                     "Failed downloading URL: " + (failedUrl ?? url));
             } catch (Exception) {
+                // it seems that DownloadFileTaskAsync creates the file, even if it fails to download
+                try {
+                    System.IO.File.Delete(targetFile);
+                }
+                catch (System.IO.IOException) {
+                    // oh well
+                }
+                
                 // NB: Some super brain-dead services are case-sensitive yet 
                 // corrupt case on upload. I can't even.
                 if (failedUrl != null) throw;
