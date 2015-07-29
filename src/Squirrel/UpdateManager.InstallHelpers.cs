@@ -51,7 +51,8 @@ namespace Squirrel
 
                 if (zp.IconUrl != null && !File.Exists(targetIco)) {
                     try {
-                        using (var wc = Utility.CreateWebClient()) { 
+                        using (var wc = Utility.CreateWebClient()) {
+                            this.Log().Info("Fetching uninstall icon {0}", zp.IconUrl);
                             await wc.DownloadFileTaskAsync(zp.IconUrl, targetPng);
                             using (var fs = new FileStream(targetIco, FileMode.Create)) {
                                 if (zp.IconUrl.AbsolutePath.EndsWith("ico")) {

@@ -29,6 +29,7 @@ namespace Squirrel
                 double toIncrement = 100.0 / releasesToDownload.Count();
 
                 if (Utility.IsHttpUrl(updateUrlOrPath)) {
+                    this.Log().Info("Downloading update from {0}", updateUrlOrPath);
                     // From Internet
                     await releasesToDownload.ForEachAsync(async x => {
                         var targetFile = Path.Combine(packagesDirectory, x.Filename);

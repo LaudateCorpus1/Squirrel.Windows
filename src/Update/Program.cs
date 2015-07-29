@@ -479,10 +479,10 @@ namespace Squirrel.Update
 
             // Check for the EXE name they want
             var targetExe = new FileInfo(Path.Combine(latestAppDir, exeName));
-            this.Log().Info("Want to launch '{0}'", targetExe);
-
+            
             // Check for path canonicalization attacks
             if (!targetExe.FullName.StartsWith(latestAppDir)) {
+                this.Log().Error("Want to launch '{0}', but it is not in {1}", targetExe, latestAppDir);
                 throw new ArgumentException();
             }
 

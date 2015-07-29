@@ -431,6 +431,9 @@ namespace Squirrel
                 }
 
                 var newCurrentFolder = "app-" + newCurrentVersion;
+
+                this.Log().Info("fixPinnedExecutables: newCurrentFolder: {0}", newCurrentFolder);
+
                 var oldAppDirectories = (new DirectoryInfo(rootAppDirectory)).GetDirectories()
                     .Where(x => x.Name.StartsWith("app-", StringComparison.InvariantCultureIgnoreCase))
                     .Where(x => x.Name != newCurrentFolder)
@@ -485,6 +488,7 @@ namespace Squirrel
 
                     // replace old app path with new app path and check, if executable still exists
                     var newTarget = Path.Combine(newAppPath, shortcut.Target.Substring(oldAppDirectory.Length + 1));
+                    this.Log().Info("Matches '{0}', want to update it to {1}", oldAppDirectory, newTarget);
 
                     if (File.Exists(newTarget)) {
                         shortcut.Target = newTarget;
@@ -498,13 +502,13 @@ namespace Squirrel
 
                         // replace working directory too if appropriate
                         if (shortcut.IconPath.StartsWith(oldAppDirectory, StringComparison.OrdinalIgnoreCase)) {
-                            this.Log().Info("Changing new directory to '{0}'", newAppPath);
+                            this.Log().Info("Changing new working directory to '{0}'", newAppPath);
                             shortcut.IconPath = Path.Combine(newAppPath, shortcut.IconPath.Substring(oldAppDirectory.Length + 1));
                         }
 
                         shortcut.Save();
                     } else {
-                        this.Log().Info("Unpinning {0} from taskbar", shortcut.Target);
+                        this.Log().Info("{0} does not exist? Unpinning {1} from taskbar", newTarget, shortcut.Target);
                         TaskbarHelper.UnpinFromTaskbar(shortcut.Target);
                     }
 
