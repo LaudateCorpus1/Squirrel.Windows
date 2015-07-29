@@ -430,7 +430,8 @@ namespace Squirrel
                     return;
                 }
 
-                var newCurrentFolder = "app-" + newCurrentVersion;
+                // want app-x.y.z not app-x.y.z.w
+                var newCurrentFolder = "app-" + newCurrentVersion.ToString(3);
 
                 this.Log().Info("fixPinnedExecutables: newCurrentFolder: {0}", newCurrentFolder);
 
