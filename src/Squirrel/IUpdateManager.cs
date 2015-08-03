@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Win32;
 using Splat;
@@ -157,7 +155,7 @@ namespace Squirrel
                 await This.ErrorIfThrows(() => 
                     This.CreateUninstallerRegistryEntry(),
                     "Failed to set up uninstaller");
-            } catch (Exception ex) {
+            } catch (Exception) {
                 if (ignoreDeltaUpdates == false) {
                     ignoreDeltaUpdates = true;
                     goto retry;
