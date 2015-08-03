@@ -112,10 +112,6 @@ namespace Squirrel
                 var remoteReleases = ReleaseEntry.ParseReleaseFile(releaseFile); 
                 progress(66);
 
-                if (!remoteReleases.Any()) {
-                    throw new Exception("Remote release File is empty or corrupted");
-                }
-
                 ret = determineUpdateInfo(localReleases, remoteReleases, ignoreDeltaUpdates);
                 
                 progress(100);
@@ -138,9 +134,9 @@ namespace Squirrel
                 var packageDirectory = Utility.PackageDirectoryForAppDir(rootAppDirectory);
                 localReleases = localReleases ?? Enumerable.Empty<ReleaseEntry>();
 
-                if (remoteReleases == null) {
+                if (remoteReleases == null || !remoteReleases.Any()) {
                     this.Log().Warn("Release information couldn't be determined due to remote corrupt RELEASES file");
-                    throw new Exception("Corrupt remote RELEASES file");
+                    remoteReleases = localReleases;
                 }
 
                 var latestFullRelease = Utility.FindCurrentVersion(remoteReleases);

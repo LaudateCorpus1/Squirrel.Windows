@@ -128,13 +128,18 @@ namespace Squirrel
 
             fileContents = Utility.RemoveByteOrderMarkerIfPresent(fileContents);
 
+            // workaround for our CDN returning 200 and a xml doc with an error message if you have the wrong url
+            if (fileContents.StartsWith("<?xml")) {
+                return new ReleaseEntry[0];
+            }
+
             var ret = fileContents.Split('\n')
                 .Where(x => !String.IsNullOrWhiteSpace(x))
                 .Select(ParseReleaseEntry)
                 .Where(x => x != null)
                 .ToArray();
 
-            return ret.Any(x => x == null) ? null : ret;
+            return ret.Any(x => x == null) ? new ReleaseEntry[0] : ret;
         }
 
         public static void WriteReleaseFile(IEnumerable<ReleaseEntry> releaseEntries, Stream stream)
