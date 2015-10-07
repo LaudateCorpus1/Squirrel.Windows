@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 using Mono.Options;
 using Splat;
 using Squirrel;
+using Squirrel.Json;
 using System.Drawing;
 using System.Windows;
 using System.Windows.Shell;
@@ -93,6 +94,7 @@ namespace Squirrel.Update
                 string processStart = default(string);
                 string processStartArgs = default(string);
                 string setupIcon = default(string);
+                string icon = default(string);
                 string shortcutArgs = default(string);
                 bool shouldWait = false;
 
@@ -119,7 +121,8 @@ namespace Squirrel.Update
                     { "p=|packagesDir=", "Path to the NuGet Packages directory for C# apps", v => packagesDir = v},
                     { "bootstrapperExe=", "Path to the Setup.exe to use as a template", v => bootstrapperExe = v},
                     { "g=|loadingGif=", "Path to an animated GIF to be displayed during installation", v => backgroundGif = v},
-                    { "i=|setupIcon", "Path to an ICO file that will be used for the Setup executable's icon", v => setupIcon = v},
+                    { "i=|icon", "Path to an ICO file that will be used for icon shortcuts", v => icon = v},
+                    { "setupIcon=", "Path to an ICO file that will be used for the Setup executable's icon", v => setupIcon = v},
                     { "n=|signWithParams=", "Sign the installer via SignTool.exe with the parameters given", v => signingParameters = v},
                     { "s|silent", "Silent install", _ => silentInstall = true},
                     { "b=|baseUrl=", "Provides a base URL to prefix the RELEASES file packages with", v => baseUrl = v, true},
@@ -128,6 +131,10 @@ namespace Squirrel.Update
                 };
 
                 opts.Parse(args);
+
+                // NB: setupIcon and icon are just aliases for compatibility
+                // reasons, because of a dumb breaking rename I made in 1.0.1
+                setupIcon = setupIcon ?? icon;
 
                 if (updateAction == UpdateAction.Unset) {
                     ShowHelp();
@@ -160,7 +167,7 @@ namespace Squirrel.Update
                     Releasify(target, releaseDir, packagesDir, bootstrapperExe, backgroundGif, signingParameters, baseUrl, setupIcon);
                     break;
                 case UpdateAction.Shortcut:
-                    Shortcut(target, shortcutArgs);
+                    Shortcut(target, shortcutArgs, processStartArgs, setupIcon);
                     break;
                 case UpdateAction.Deshortcut:
                     Deshortcut(target, shortcutArgs);
@@ -198,6 +205,16 @@ namespace Squirrel.Update
 
             using (var mgr = new UpdateManager(sourceDirectory, ourAppName)) {
                 this.Log().Info("About to install to: " + mgr.RootAppDirectory);
+                if (Directory.Exists(mgr.RootAppDirectory)) {
+                    this.Log().Warn("Install path {0} already exists, burning it to the ground", mgr.RootAppDirectory);
+
+                    await this.ErrorIfThrows(() => Utility.DeleteDirectory(mgr.RootAppDirectory),
+                        "Failed to remove existing directory on full install, is the app still running???");
+
+                    this.ErrorIfThrows(() => Utility.Retry(() => Directory.CreateDirectory(mgr.RootAppDirectory), 3),
+                        "Couldn't recreate app directory, perhaps Antivirus is blocking it");
+                }
+ 
                 Directory.CreateDirectory(mgr.RootAppDirectory);
 
                 var updateTarget = Path.Combine(mgr.RootAppDirectory, "Update.exe");
@@ -428,7 +445,7 @@ namespace Squirrel.Update
 
         }
 
-        public void Shortcut(string exeName, string shortcutArgs)
+        public void Shortcut(string exeName, string shortcutArgs, string processStartArgs, string icon)
         {
             if (String.IsNullOrWhiteSpace(exeName)) {
                 ShowHelp();
@@ -440,7 +457,7 @@ namespace Squirrel.Update
             var locations = parseShortcutLocations(shortcutArgs);
 
             using (var mgr = new UpdateManager("", appName)) {
-                mgr.CreateShortcutsForExecutable(exeName, locations ?? defaultLocations, false);
+                mgr.CreateShortcutsForExecutable(exeName, locations ?? defaultLocations, false, processStartArgs, icon);
             }
         }
 
@@ -481,7 +498,7 @@ namespace Squirrel.Update
             var targetExe = new FileInfo(Path.Combine(latestAppDir, exeName));
             
             // Check for path canonicalization attacks
-            if (!targetExe.FullName.StartsWith(latestAppDir)) {
+            if (!targetExe.FullName.StartsWith(latestAppDir, StringComparison.Ordinal)) {
                 this.Log().Error("Want to launch '{0}', but it is not in {1}", targetExe, latestAppDir);
                 throw new ArgumentException();
             }
@@ -586,7 +603,7 @@ namespace Squirrel.Update
             }
 
             Tuple<int, string> processResult = await Utility.InvokeProcessAsync(exe,
-                String.Format("sign {0} {1}", signingOpts, exePath), CancellationToken.None);
+                String.Format("sign {0} \"{1}\"", signingOpts, exePath), CancellationToken.None);
 
             if (processResult.Item1 != 0) {
                 var msg = String.Format(
@@ -602,6 +619,7 @@ namespace Squirrel.Update
         {
             var verStrings = new Dictionary<string, string>() {
                 { "CompanyName", package.Authors.First() },
+                { "LegalCopyright", package.Copyright ?? "Copyright © " + DateTime.Now.Year.ToString() + " " + package.Authors.First() },
                 { "FileDescription", package.Summary ?? package.Description ?? "Installer for " + package.Id },
                 { "ProductName", package.Description ?? package.Summary ?? package.Id },
             };
@@ -695,18 +713,23 @@ namespace Squirrel.Update
 
         public SetupLogLogger(bool saveInTemp)
         {
-            try {
-                var dir = saveInTemp ?
-                    Path.GetTempPath() :
-                    Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
+            for (int i=0; i < 10; i++) {
+                try {
+                    var dir = saveInTemp ?
+                        Path.GetTempPath() :
+                        Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
 
-                var file = Path.Combine(dir, "SquirrelSetup.log");
-                inner = new StreamWriter(file, true, Encoding.UTF8);
-            } catch (Exception ex) {
-                // Didn't work? Log to stderr
-                Console.Error.WriteLine("Couldn't open log file, writing to stderr: " + ex.ToString());
-                inner = Console.Error;
+                    var file = Path.Combine(dir, String.Format("SquirrelSetup.{0}.log", i).Replace(".0.log", ".log"));
+                    var str = File.Open(file, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+                    inner = new StreamWriter(str, Encoding.UTF8, 4096, false);
+                    return;
+                } catch (Exception ex) {
+                    // Didn't work? Keep going
+                    Console.Error.WriteLine("Couldn't open log file, trying new file: " + ex.ToString());
+                }
             }
+
+            inner = Console.Error;
         }
 
         public void Write(string message, LogLevel logLevel)
