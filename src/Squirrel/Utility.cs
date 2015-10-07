@@ -188,6 +188,7 @@ namespace Squirrel
         public static async Task<Tuple<int, string>> InvokeProcessAsync(ProcessStartInfo psi, CancellationToken ct)
         {
             var pi = Process.Start(psi);
+            Log().Info("Process Started: {0} {1}, pid {2}", psi.FileName, psi.Arguments, pi.Id);
             await Task.Run(() => {
                 while (!ct.IsCancellationRequested) {
                     if (pi.WaitForExit(2000)) return;
@@ -207,7 +208,7 @@ namespace Squirrel
                 }
             }
 
-            Log().Debug("Received exitcode {0} from process {1}", pi.ExitCode, psi.FileName);
+            Log().Info("Received exitcode {0} from process {1}", pi.ExitCode, psi.FileName);
             return Tuple.Create(pi.ExitCode, textResult.Trim());
         }
 

@@ -326,7 +326,9 @@ namespace Squirrel
                             .ForEachAsync(file => {
                                 var tgt = Path.Combine(target.FullName, file.Name);
                                 this.Log().Info("Moving file {0} to {1}", file.FullName, tgt);
-                                if (File.Exists(tgt)) Utility.DeleteFileHarder(tgt, true);
+                                if (File.Exists(tgt)) {
+                                    Utility.DeleteFileHarder(tgt, true);
+                                }
                                 file.MoveTo(tgt);
                             })
                             .Wait();
@@ -392,7 +394,8 @@ namespace Squirrel
                 if (us != null && Path.GetFileName(us.Location).Equals("update.exe", StringComparison.OrdinalIgnoreCase)) {
                     var appName = targetDir.Parent.Name;
 
-                    Process.Start(newSquirrel, "--updateSelf=" + us.Location);
+                    var p = Process.Start(newSquirrel, "--updateSelf=" + us.Location);
+                    this.Log().Info("Started updateSelf pid {0}", p.Id);
                     return;
                 }
 
@@ -416,7 +419,6 @@ namespace Squirrel
                 if (!firstRunOnly) await squirrelApps.ForEachAsync(async exe => {
                     using (var cts = new CancellationTokenSource()) { 
                         cts.CancelAfter(15 * 1000);
-
                         try {
                             await Utility.InvokeProcessAsync(exe, args, cts.Token);
                         } catch (Exception ex) {
@@ -446,7 +448,10 @@ namespace Squirrel
                 var firstRunParam = isInitialInstall ? "--squirrel-firstrun" : "";
                 squirrelApps
                     .Select(exe => new ProcessStartInfo(exe, firstRunParam) { WorkingDirectory = Path.GetDirectoryName(exe) })
-                    .ForEach(info => Process.Start(info));
+                    .ForEach(info => {
+                        var p = Process.Start(info);
+                        this.Log().Info("ran {0}, pid {1}", info.FileName, p.Id);
+                    });
             }
 
             void fixPinnedExecutables(Version newCurrentVersion) 
@@ -594,7 +599,7 @@ namespace Squirrel
                                     try {
                                         await Utility.InvokeProcessAsync(exe, args, cts.Token);
                                     } catch (Exception ex) {
-                                        this.Log().ErrorException("Coudln't run Squirrel hook, continuing: " + exe, ex);
+                                        this.Log().ErrorException("Couldn't run Squirrel hook, continuing: " + exe, ex);
                                     }
                                 }
                             }, 1 /* at a time */);

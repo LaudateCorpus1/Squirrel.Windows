@@ -738,7 +738,10 @@ namespace Squirrel.Update
                 return;
             }
 
-            var msg = string.Format("{0}> {1}", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), message);
+            var msg = string.Format("{0}> {1}> {2}",
+                Process.GetCurrentProcess().Id,
+                DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                message);
 
             lock (gate)
             {
