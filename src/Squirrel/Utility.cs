@@ -17,6 +17,19 @@ namespace Squirrel
 {
     static class Utility
     {
+        public static void WaitForDebugger(bool andBreak)
+        {
+            while (!Debugger.IsAttached)
+            {
+                Thread.Sleep(1000);
+            }
+
+            if (andBreak)
+            {
+                Debugger.Break();
+            }
+        }
+
         public static string RemoveByteOrderMarkerIfPresent(string content)
         {
             return string.IsNullOrEmpty(content) ? 
