@@ -18,6 +18,7 @@ using System.Drawing;
 using System.Windows;
 using System.Windows.Shell;
 using NuGet;
+using Microsoft.Win32;
 
 namespace Squirrel.Update
 {
@@ -64,6 +65,29 @@ namespace Squirrel.Update
                     throw;
                 }
                 // Ideally we would deregister the logger from the Locator before it was disposed - this is a hazard as it is at the moment
+            }
+        }
+
+        public void ClearAllCompatibilityFlags(string forDir)
+        {
+            // Windows stores a setting in the registry for marking compatibility flags on executables,
+            // these persist even when the target is deleted. We encountered a bug wherein users would mark
+            // the update.exe as RUNASADMIN, then squirrel would lose its mind. This clears out any such flags
+            // on any executables in the tree, intended to be run before an install or update, and presumably
+            // and app that requires such flags could set them again during the install/update callbacks.
+ 
+            var parentKey = RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, RegistryView.Default)
+                .OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers", true);
+
+            if (parentKey != null) {
+                var names = parentKey.GetValueNames();
+                foreach (var s in names) {
+                    if (s.StartsWith(forDir)) {
+                        this.Log().Info("Clearing compatibility flags from {0}", s);
+                        parentKey.DeleteValue(s);
+                    }
+                }
+                parentKey.Close();
             }
         }
 
@@ -205,6 +229,9 @@ namespace Squirrel.Update
 
             using (var mgr = new UpdateManager(sourceDirectory, ourAppName)) {
                 this.Log().Info("About to install to: " + mgr.RootAppDirectory);
+
+                this.ClearAllCompatibilityFlags(mgr.RootAppDirectory);
+
                 if (Directory.Exists(mgr.RootAppDirectory)) {
                     this.Log().Warn("Install path {0} already exists, burning it to the ground", mgr.RootAppDirectory);
 
@@ -237,6 +264,8 @@ namespace Squirrel.Update
             using (var mgr = new UpdateManager(updateUrl, appName)) {
                 bool ignoreDeltaUpdates = false;
                 this.Log().Info("About to update to: " + mgr.RootAppDirectory);
+
+                this.ClearAllCompatibilityFlags(mgr.RootAppDirectory);
 
             retry:
                 try {
@@ -538,6 +567,7 @@ namespace Squirrel.Update
                 if (handle != IntPtr.Zero) {
                     this.Log().Info("About to wait for parent PID {0}", parentPid);
                     NativeMethods.WaitForSingleObject(handle, 0xFFFFFFFF /*INFINITE*/);
+                    this.Log().Info("parent PID {0} exited", parentPid);
                 } else {
                     this.Log().Info("Parent PID {0} no longer valid - ignoring", parentPid);
                 }
