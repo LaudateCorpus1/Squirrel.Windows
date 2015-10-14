@@ -121,6 +121,7 @@ namespace Squirrel.Update
                 string icon = default(string);
                 string shortcutArgs = default(string);
                 bool shouldWait = false;
+                bool updateOnly = false;
 
                 opts = new OptionSet() {
                     "Usage: Squirrel.exe command [OPTS]",
@@ -152,6 +153,7 @@ namespace Squirrel.Update
                     { "b=|baseUrl=", "Provides a base URL to prefix the RELEASES file packages with", v => baseUrl = v, true},
                     { "a=|process-start-args=", "Arguments that will be used when starting executable", v => processStartArgs = v, true},
                     { "l=|shortcut-locations=", "Comma-separated string of shortcut locations, e.g. 'Desktop,StartMenu'", v => shortcutArgs = v},
+                    { "updateOnly", "For createShortcut, should we only update an existing link", v => updateOnly = true},
                 };
 
                 opts.Parse(args);
@@ -191,7 +193,7 @@ namespace Squirrel.Update
                     Releasify(target, releaseDir, packagesDir, bootstrapperExe, backgroundGif, signingParameters, baseUrl, setupIcon);
                     break;
                 case UpdateAction.Shortcut:
-                    Shortcut(target, shortcutArgs, processStartArgs, setupIcon);
+                    Shortcut(target, shortcutArgs, processStartArgs, setupIcon, updateOnly);
                     break;
                 case UpdateAction.Deshortcut:
                     Deshortcut(target, shortcutArgs);
@@ -474,7 +476,7 @@ namespace Squirrel.Update
 
         }
 
-        public void Shortcut(string exeName, string shortcutArgs, string processStartArgs, string icon)
+        public void Shortcut(string exeName, string shortcutArgs, string processStartArgs, string icon, bool updateOnly)
         {
             if (String.IsNullOrWhiteSpace(exeName)) {
                 ShowHelp();
@@ -482,11 +484,10 @@ namespace Squirrel.Update
             }
 
             var appName = getAppNameFromDirectory();
-            var defaultLocations = ShortcutLocation.StartMenu | ShortcutLocation.Desktop;
             var locations = parseShortcutLocations(shortcutArgs);
 
             using (var mgr = new UpdateManager("", appName)) {
-                mgr.CreateShortcutsForExecutable(exeName, locations ?? defaultLocations, false, processStartArgs, icon);
+                mgr.CreateShortcutsForExecutable(exeName, locations ?? ShortcutLocations.Defaults, updateOnly, processStartArgs, icon);
             }
         }
 
@@ -498,11 +499,10 @@ namespace Squirrel.Update
             }
 
             var appName = getAppNameFromDirectory();
-            var defaultLocations = ShortcutLocation.StartMenu | ShortcutLocation.Desktop;
             var locations = parseShortcutLocations(shortcutArgs);
 
             using (var mgr = new UpdateManager("", appName)) {
-                mgr.RemoveShortcutsForExecutable(exeName, locations ?? defaultLocations);
+                mgr.RemoveShortcutsForExecutable(exeName, locations ?? ShortcutLocations.Defaults);
             }
         }
 

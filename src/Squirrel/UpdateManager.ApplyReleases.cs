@@ -116,7 +116,7 @@ namespace Squirrel
                                 }
                             }, 1 /*at a time*/);
                         } else {
-                            allApps.ForEach(x => RemoveShortcutsForExecutable(x.Name, ShortcutLocation.StartMenu | ShortcutLocation.Desktop));
+                            allApps.ForEach(x => RemoveShortcutsForExecutable(x.Name, ShortcutLocations.Defaults));
                         }
 
                         // NB: Some people attempt to uninstall apps while 
@@ -219,7 +219,10 @@ namespace Squirrel
                 var fileVerInfo = FileVersionInfo.GetVersionInfo(exePath);
 
                 foreach (var f in (ShortcutLocation[]) Enum.GetValues(typeof(ShortcutLocation))) {
-                    if (!locations.HasFlag(f)) continue;
+                    // If we are doing update, might as well check all the places.
+                    if (!updateOnly && !locations.HasFlag(f)) {
+                        continue;
+                    }
 
                     var file = linkTargetForVersionInfo(f, zf, fileVerInfo);
                     var fileExists = File.Exists(file);
@@ -229,7 +232,9 @@ namespace Squirrel
                     // want it there and explicitly deleted it, so we shouldn't
                     // annoy them by recreating it.
                     if (!fileExists && updateOnly) {
-                        this.Log().Warn("Wanted to update shortcut {0} but it appears user deleted it", file);
+                        if (locations.HasFlag(f)) {
+                            this.Log().Warn("Wanted to update shortcut {0} but it appears user deleted it", file);
+                        }
                         continue;
                     }
 
@@ -440,7 +445,7 @@ namespace Squirrel
 
                     // Create shortcuts for apps automatically if they didn't
                     // create any Squirrel-aware apps
-                    squirrelApps.ForEach(x => CreateShortcutsForExecutable(Path.GetFileName(x), ShortcutLocation.Desktop | ShortcutLocation.StartMenu, isInitialInstall == false, null, null));
+                    squirrelApps.ForEach(x => CreateShortcutsForExecutable(Path.GetFileName(x), ShortcutLocations.Defaults, isInitialInstall == false, null, null));
                 }
 
                 if (!isInitialInstall || silentInstall) return;
@@ -715,6 +720,9 @@ namespace Squirrel
                     break;
                 case ShortcutLocation.AppRoot:
                     dir = rootAppDirectory;
+                    break;
+                case ShortcutLocation.Taskbar:
+                    dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Microsoft", "Internet Explorer", "Quick Launch", "User Pinned", "TaskBar");
                     break;
                 }
 

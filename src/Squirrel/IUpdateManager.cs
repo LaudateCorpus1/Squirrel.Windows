@@ -17,7 +17,13 @@ namespace Squirrel
         /// <summary>
         /// A shortcut in the application folder, useful for portable applications.
         /// </summary>
-        AppRoot = 1 << 3
+        AppRoot = 1 << 3,
+        Taskbar = 1 << 4,
+    }
+
+    public static class ShortcutLocations
+    {
+        public static ShortcutLocation Defaults = ShortcutLocation.StartMenu | ShortcutLocation.Desktop;
     }
 
     public interface IUpdateManager : IDisposable, IEnableLogger
@@ -175,7 +181,7 @@ namespace Squirrel
         {
             This.CreateShortcutsForExecutable(Path.GetFileName(
                 Assembly.GetEntryAssembly().Location),
-                ShortcutLocation.Desktop | ShortcutLocation.StartMenu, 
+                ShortcutLocations.Defaults, 
                 Environment.CommandLine.Contains("squirrel-install") == false,
                 null, null);
         }
@@ -184,7 +190,7 @@ namespace Squirrel
         {
             This.RemoveShortcutsForExecutable(
                 Path.GetFileName(Assembly.GetEntryAssembly().Location),
-                ShortcutLocation.Desktop | ShortcutLocation.StartMenu);
+                ShortcutLocations.Defaults);
         }
     }
 }
