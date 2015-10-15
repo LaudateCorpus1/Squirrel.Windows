@@ -466,23 +466,12 @@ namespace Squirrel
                     return;
                 }
 
-                // want app-x.y.z not app-x.y.z.w
-                var newCurrentFolder = "app-" + newCurrentVersion.ToString(3);
+                var newCurrentFolder = "app-" + newCurrentVersion;
 
                 this.Log().Info("fixPinnedExecutables: newCurrentFolder: {0}", newCurrentFolder);
 
-                var oldAppDirectories = (new DirectoryInfo(rootAppDirectory)).GetDirectories()
-                    .Where(x => x.Name.StartsWith("app-", StringComparison.InvariantCultureIgnoreCase))
-                    .Where(x => x.Name != newCurrentFolder)
-                    .Select(x => x.FullName)
-                    .ToArray();
-
-                if (!oldAppDirectories.Any()) {
-                    this.Log().Info("fixPinnedExecutables: oldAppDirectories is empty, this is pointless");
-                    return;
-                }
-
                 var newAppPath = Path.Combine(rootAppDirectory, newCurrentFolder);
+                bool newVersionExists = Directory.Exists(newAppPath);
 
                 var taskbarPath = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -505,7 +494,7 @@ namespace Squirrel
 
                 foreach (var shortcut in shellLinks) {
                     try {
-                        updateLink(shortcut, oldAppDirectories, newAppPath);
+                        updateLink(shortcut, newAppPath, newVersionExists);
                     } catch (Exception ex) {
                         var message = String.Format("fixPinnedExecutables: shortcut failed: {0}", shortcut.Target);
                         this.Log().ErrorException(message, ex);
@@ -513,44 +502,46 @@ namespace Squirrel
                 }
             }
 
-            void updateLink(ShellLink shortcut, string[] oldAppDirectories, string newAppPath)
+            string updatePath(string pathToUpdate, string newAppPath)
+            {
+                if (!pathToUpdate.StartsWith(rootAppDirectory))
+                {
+                    return pathToUpdate;
+                }
+                string afterRoot = pathToUpdate.Substring(rootAppDirectory.Length + 1);
+                string[] pathParts = afterRoot.Split(Path.DirectorySeparatorChar);
+                // if target is in app subdir, update it
+                if (pathParts[0].StartsWith("app-"))
+                {
+                    pathParts[0] = newAppPath;
+                    pathToUpdate = Path.Combine(pathParts);
+                }
+                return pathToUpdate;
+            }
+
+            void updateLink(ShellLink shortcut, string newAppPath, bool newVersionExists)
             {
                 this.Log().Info("Processing shortcut '{0}'", shortcut.Target);
 
-                foreach (var oldAppDirectory in oldAppDirectories) {
-                    if (!shortcut.Target.StartsWith(oldAppDirectory, StringComparison.OrdinalIgnoreCase) && !shortcut.IconPath.StartsWith(oldAppDirectory, StringComparison.OrdinalIgnoreCase)) {
-                        this.Log().Info("Does not match '{0}', continuing to next directory", oldAppDirectory);
-                        continue;
-                    }
+                string expectedStart = rootAppDirectory + "\\app-";
 
-                    // replace old app path with new app path and check, if executable still exists
-                    var newTarget = Path.Combine(newAppPath, shortcut.Target.Substring(oldAppDirectory.Length + 1));
-                    this.Log().Info("Matches '{0}', want to update it to {1}", oldAppDirectory, newTarget);
-
-                    if (File.Exists(newTarget)) {
-                        shortcut.Target = newTarget;
-
-                        // replace working directory too if appropriate
-                        if (shortcut.WorkingDirectory.StartsWith(oldAppDirectory, StringComparison.OrdinalIgnoreCase)) {
-                            this.Log().Info("Changing new directory to '{0}'", newAppPath);
-                            shortcut.WorkingDirectory = Path.Combine(newAppPath,
-                                shortcut.WorkingDirectory.Substring(oldAppDirectory.Length + 1));
-                        }
-
-                        // replace working directory too if appropriate
-                        if (shortcut.IconPath.StartsWith(oldAppDirectory, StringComparison.OrdinalIgnoreCase)) {
-                            this.Log().Info("Changing new working directory to '{0}'", newAppPath);
-                            shortcut.IconPath = Path.Combine(newAppPath, shortcut.IconPath.Substring(oldAppDirectory.Length + 1));
-                        }
-
-                        shortcut.Save();
-                    } else {
-                        this.Log().Info("{0} does not exist? Unpinning {1} from taskbar", newTarget, shortcut.Target);
-                        TaskbarHelper.UnpinFromTaskbar(shortcut.Target);
-                    }
-
-                    break;
+                if (!shortcut.WorkingDirectory.StartsWith(expectedStart, StringComparison.OrdinalIgnoreCase)) {
+                    this.Log().Info("'{0}' is not in '{1}', skipping", shortcut.WorkingDirectory, rootAppDirectory);
+                    return;
                 }
+
+                if (!newVersionExists) {
+                    this.Log().Info("Unpinning {0} from taskbar", shortcut.Target);
+                    TaskbarHelper.UnpinFromTaskbar(shortcut.Target);
+                    return;
+                }
+
+                shortcut.Target = updatePath(shortcut.Target, newAppPath);
+                shortcut.WorkingDirectory = updatePath(shortcut.WorkingDirectory, newAppPath);
+                shortcut.IconPath = updatePath(shortcut.IconPath, newAppPath);
+
+                this.Log().Info("Updating shortcut to {0}", shortcut.Target);
+                shortcut.Save();
             }
 
             // NB: Once we uninstall the old version of the app, we try to schedule
