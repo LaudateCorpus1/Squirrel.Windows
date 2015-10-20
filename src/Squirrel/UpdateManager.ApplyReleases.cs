@@ -473,10 +473,6 @@ namespace Squirrel
                 var newAppPath = Path.Combine(rootAppDirectory, newCurrentFolder);
                 bool newVersionExists = Directory.Exists(newAppPath);
 
-                var taskbarPath = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar");
-
                 Func<FileInfo, ShellLink> resolveLink = file => {
                     try {
                         return new ShellLink(file.FullName);
@@ -487,32 +483,42 @@ namespace Squirrel
                     }
                 };
 
-                var shellLinks = (new DirectoryInfo(taskbarPath)).GetFiles("*.lnk")
-                    .Select(resolveLink)
-                    .Where(x => x != null)
-                    .ToArray();
+                var taskbarPath = new Tuple<string, SearchOption>(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar"),
+                    SearchOption.TopDirectoryOnly);
+                var startMenuPath = new Tuple<string, SearchOption>(Environment.GetFolderPath(Environment.SpecialFolder.StartMenu),
+                    SearchOption.AllDirectories);
+                var desktopPath = new Tuple<string, SearchOption>(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+                    SearchOption.TopDirectoryOnly);
+                Tuple<string, SearchOption>[] pathsToUpdate = { taskbarPath, startMenuPath, desktopPath };
 
-                foreach (var shortcut in shellLinks) {
-                    try {
-                        updateLink(shortcut, newAppPath, newVersionExists);
-                    } catch (Exception ex) {
-                        var message = String.Format("fixPinnedExecutables: shortcut failed: {0}", shortcut.Target);
-                        this.Log().ErrorException(message, ex);
+                foreach (var searchPath in pathsToUpdate) {
+                    var shellLinks = (new DirectoryInfo(searchPath.Item1)).GetFiles("*.lnk", searchPath.Item2)
+                        .Select(resolveLink)
+                        .Where(x => x != null)
+                        .ToArray();
+
+                    foreach (var shortcut in shellLinks) {
+                        try {
+                            updateLink(shortcut, newAppPath, newVersionExists);
+                        }
+                        catch (Exception ex) {
+                            var message = String.Format("fixPinnedExecutables: shortcut failed: {0}", shortcut.Target);
+                            this.Log().ErrorException(message, ex);
+                        }
                     }
                 }
             }
 
             string updatePath(string pathToUpdate, string newAppPath)
             {
-                if (!pathToUpdate.StartsWith(rootAppDirectory))
-                {
+                if (!pathToUpdate.StartsWith(rootAppDirectory)) {
                     return pathToUpdate;
                 }
                 string afterRoot = pathToUpdate.Substring(rootAppDirectory.Length + 1);
                 string[] pathParts = afterRoot.Split(Path.DirectorySeparatorChar);
                 // if target is in app subdir, update it
-                if (pathParts[0].StartsWith("app-"))
-                {
+                if (pathParts[0].StartsWith("app-")) {
                     pathParts[0] = newAppPath;
                     pathToUpdate = Path.Combine(pathParts);
                 }
