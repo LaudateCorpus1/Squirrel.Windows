@@ -466,7 +466,7 @@ namespace Squirrel
                     return;
                 }
 
-                var newCurrentFolder = "app-" + newCurrentVersion;
+                var newCurrentFolder = "app-" + newCurrentVersion.ToString(3);
 
                 this.Log().Info("fixPinnedExecutables: newCurrentFolder: {0}", newCurrentFolder);
 
@@ -527,7 +527,7 @@ namespace Squirrel
 
             void updateLink(ShellLink shortcut, string newAppPath, bool newVersionExists)
             {
-                this.Log().Info("Processing shortcut '{0}'", shortcut.Target);
+                this.Log().Info("Processing shortcut '{0}'", shortcut.ShortCutFile);
 
                 string expectedStart = rootAppDirectory + "\\app-";
 
@@ -537,7 +537,7 @@ namespace Squirrel
                 }
 
                 if (!newVersionExists) {
-                    this.Log().Info("Unpinning {0} from taskbar", shortcut.Target);
+                    this.Log().Info("Unpinning {0} from taskbar", shortcut.ShortCutFile);
                     TaskbarHelper.UnpinFromTaskbar(shortcut.Target);
                     return;
                 }

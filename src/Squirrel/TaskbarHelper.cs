@@ -39,10 +39,6 @@ namespace Squirrel.Shell
 
         static void pinUnpin(string executablePath, string verbToExecute) 
         {
-            if (!File.Exists(executablePath)) {
-                throw new FileNotFoundException(executablePath);
-            }
-
             dynamic shellApplication = Activator.CreateInstance(Type.GetTypeFromProgID("Shell.Application"));
 
             try {
