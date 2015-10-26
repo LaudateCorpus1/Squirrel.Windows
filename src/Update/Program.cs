@@ -121,6 +121,7 @@ namespace Squirrel.Update
                 string icon = default(string);
                 string shortcutArgs = default(string);
                 bool shouldWait = false;
+                bool noMsi = false;
                 bool updateOnly = false;
 
                 opts = new OptionSet() {
@@ -153,6 +154,7 @@ namespace Squirrel.Update
                     { "b=|baseUrl=", "Provides a base URL to prefix the RELEASES file packages with", v => baseUrl = v, true},
                     { "a=|process-start-args=", "Arguments that will be used when starting executable", v => processStartArgs = v, true},
                     { "l=|shortcut-locations=", "Comma-separated string of shortcut locations, e.g. 'Desktop,StartMenu'", v => shortcutArgs = v},
+                    { "no-msi", "Don't generate an MSI package", v => noMsi = true},
                     { "updateOnly", "For createShortcut, should we only update an existing link", v => updateOnly = true},
                 };
 
@@ -190,7 +192,7 @@ namespace Squirrel.Update
                     UpdateSelf().Wait();
                     break;
                 case UpdateAction.Releasify:
-                    Releasify(target, releaseDir, packagesDir, bootstrapperExe, backgroundGif, signingParameters, baseUrl, setupIcon);
+                    Releasify(target, releaseDir, packagesDir, bootstrapperExe, backgroundGif, signingParameters, baseUrl, setupIcon, !noMsi);
                     break;
                 case UpdateAction.Shortcut:
                     Shortcut(target, shortcutArgs, processStartArgs, setupIcon, updateOnly);
@@ -364,7 +366,7 @@ namespace Squirrel.Update
             }
         }
 
-        public void Releasify(string package, string targetDir = null, string packagesDir = null, string bootstrapperExe = null, string backgroundGif = null, string signingOpts = null, string baseUrl = null, string setupIcon = null)
+        public void Releasify(string package, string targetDir = null, string packagesDir = null, string bootstrapperExe = null, string backgroundGif = null, string signingOpts = null, string baseUrl = null, string setupIcon = null, bool generateMsi = true)
         {
             if (baseUrl != null) {
                 if (!Utility.IsHttpUrl(baseUrl)) {
@@ -435,9 +437,13 @@ namespace Squirrel.Update
 
             foreach (var file in toProcess) { File.Delete(file.FullName); }
 
-            var newReleaseEntries = processed.Select(packageFilename => ReleaseEntry.GenerateFromFile(packageFilename, baseUrl)).ToList();
-            var distinctPreviousReleases = previousReleases.Where(x => !newReleaseEntries.Select(e => e.Version).Contains(x.Version));
+            var newReleaseEntries = processed
+                .Select(packageFilename => ReleaseEntry.GenerateFromFile(packageFilename, baseUrl))
+                .ToList();
+            var distinctPreviousReleases = previousReleases
+                .Where(x => !newReleaseEntries.Select(e => e.Version).Contains(x.Version));
             var releaseEntries = distinctPreviousReleases.Concat(newReleaseEntries).ToList();
+
             ReleaseEntry.WriteReleaseFile(releaseEntries, releaseFilePath);
 
             var targetSetupExe = Path.Combine(di.FullName, baseName + "Setup.exe");
@@ -474,6 +480,9 @@ namespace Squirrel.Update
                 signPEFile(targetSetupExe, signingOpts).Wait();
             }
 
+            if (generateMsi) {
+                createMsiPackage(targetSetupExe, new ZipPackage(package)).Wait();
+            }
         }
 
         public void Shortcut(string exeName, string shortcutArgs, string processStartArgs, string icon, bool updateOnly)
@@ -518,9 +527,18 @@ namespace Squirrel.Update
             var releases = ReleaseEntry.ParseReleaseFile(
                 File.ReadAllText(Utility.LocalReleaseFileForAppDir(appDir), Encoding.UTF8));
 
+            // NB: We add the hacked up version in here to handle a migration 
+            // issue, where versions of Squirrel pre PR #450 will not understand
+            // prerelease tags, so it will end up writing the release name sans
+            // tags. However, the RELEASES file _will_ have them, so we need to look
+            // for directories that match both the real version, and the sanitized
+            // version, giving priority to the former.
             var latestAppDir = releases
                 .OrderByDescending(x => x.Version)
-                .Select(x => Utility.AppDirForRelease(appDir, x))
+                .SelectMany(x => new[] {
+                    Utility.AppDirForRelease(appDir, x),
+                    Utility.AppDirForVersion(appDir, new SemanticVersion(x.Version.Version.Major, x.Version.Version.Minor, x.Version.Version.Build, ""))
+                })
                 .FirstOrDefault(x => Directory.Exists(x));
 
             // Check for the EXE name they want
@@ -647,9 +665,10 @@ namespace Squirrel.Update
 
         static async Task setPEVersionInfoAndIcon(string exePath, IPackage package, string iconPath = null)
         {
+            var company = String.Join(",", package.Authors);
             var verStrings = new Dictionary<string, string>() {
-                { "CompanyName", package.Authors.First() },
-                { "LegalCopyright", package.Copyright ?? "Copyright © " + DateTime.Now.Year.ToString() + " " + package.Authors.First() },
+                { "CompanyName", company },
+                { "LegalCopyright", package.Copyright ?? "Copyright © " + DateTime.Now.Year.ToString() + " " + company },
                 { "FileDescription", package.Summary ?? package.Description ?? "Installer for " + package.Id },
                 { "ProductName", package.Description ?? package.Summary ?? package.Id },
             };
@@ -682,6 +701,74 @@ namespace Squirrel.Update
             } else {
                 Console.WriteLine(processResult.Item2);
             }
+        }
+
+        static async Task createMsiPackage(string setupExe, IPackage package)
+        {
+            var pathToWix = pathToWixTools();
+            var setupExeDir = Path.GetDirectoryName(setupExe);
+            var company = String.Join(",", package.Authors);
+
+            var templateText = File.ReadAllText(Path.Combine(pathToWix, "template.wxs"));
+            var templateResult = CopStache.Render(templateText, new Dictionary<string, string> {
+                { "Id", package.Id },
+                { "Title", package.Title },
+                { "Author", company },
+                { "Summary", package.Summary ?? package.Description ?? package.Id },
+            });
+
+            var wxsTarget = Path.Combine(setupExeDir, "Setup.wxs");
+            File.WriteAllText(wxsTarget, templateResult, Encoding.UTF8);
+
+            var candleParams = String.Format("-nologo -ext WixNetFxExtension -out \"{0}\" \"{1}\"", wxsTarget.Replace(".wxs", ".wixobj"), wxsTarget);
+            var processResult = await Utility.InvokeProcessAsync(
+                Path.Combine(pathToWix, "candle.exe"), candleParams, CancellationToken.None);
+
+            if (processResult.Item1 != 0) {
+                var msg = String.Format(
+                    "Failed to compile WiX template, command invoked was: '{0} {1}'\n\nOutput was:\n{2}", 
+                    "candle.exe", candleParams, processResult.Item2);
+
+                throw new Exception(msg);
+            }
+
+            var lightParams = String.Format("-ext WixNetFxExtension -sval -out \"{0}\" \"{1}\"", wxsTarget.Replace(".wxs", ".msi"), wxsTarget.Replace(".wxs", ".wixobj"));
+            processResult = await Utility.InvokeProcessAsync(
+                Path.Combine(pathToWix, "light.exe"), lightParams, CancellationToken.None);
+
+            if (processResult.Item1 != 0) {
+                var msg = String.Format(
+                    "Failed to link WiX template, command invoked was: '{0} {1}'\n\nOutput was:\n{2}", 
+                    "light.exe", lightParams, processResult.Item2);
+
+                throw new Exception(msg);
+            }
+
+            var toDelete = new[] {
+                wxsTarget,
+                wxsTarget.Replace(".wxs", ".wixobj"),
+                wxsTarget.Replace(".wxs", ".wixpdb"),
+            };
+
+            await Utility.ForEachAsync(toDelete, x => Utility.DeleteFileHarder(x));
+        }
+
+        static string pathToWixTools()
+        {
+            var ourPath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location); 
+
+            // Same Directory? (i.e. released)
+            if (File.Exists(Path.Combine(ourPath, "candle.exe"))) {
+                return ourPath;
+            }
+
+            // Debug Mode (i.e. in vendor)
+            var debugPath = Path.Combine(ourPath, "..", "..", "..", "vendor", "wix", "candle.exe");
+            if (File.Exists(debugPath)) {
+                return Path.GetFullPath(debugPath);
+            }
+
+            throw new Exception("WiX tools can't be found");
         }
 
         static string getAppNameFromDirectory(string path = null)

@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
+using NuGet;
 
 namespace Squirrel
 {
@@ -363,6 +364,11 @@ namespace Squirrel
             return Path.Combine(rootAppDirectory, "app-" + entry.Version.ToString());
         }
 
+        public static string AppDirForVersion(string rootAppDirectory, SemanticVersion version)
+        {
+            return Path.Combine(rootAppDirectory, "app-" + version.ToString());
+        }
+
         public static string PackageDirectoryForAppDir(string rootAppDirectory) 
         {
             return Path.Combine(rootAppDirectory, "packages");
@@ -414,6 +420,36 @@ namespace Squirrel
             return uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps;
         }
 
+        public static Uri AppendPathToUri(Uri uri, string path)
+        {
+            var builder = new UriBuilder(uri);
+            if (!builder.Path.EndsWith("/")) {
+                builder.Path += "/";
+            }
+
+            builder.Path += path;
+            return builder.Uri;
+        }
+
+        public static Uri EnsureTrailingSlash(Uri uri)
+        {
+            return AppendPathToUri(uri, "");
+        }
+
+        public static Uri AddQueryParamsToUri(Uri uri, IEnumerable<KeyValuePair<string, string>> newQuery)
+        {
+            var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+
+            foreach (var entry in newQuery) {
+                query[entry.Key] = entry.Value;
+            }
+
+            var builder = new UriBuilder(uri);
+            builder.Query = query.ToString();
+
+            return builder.Uri;
+        }
+
         public static void DeleteFileHarder(string path, bool ignoreIfFails = false)
         {
             try {
@@ -426,42 +462,13 @@ namespace Squirrel
             }
         }
 
-        public static async Task DeleteDirectoryWithFallbackToNextReboot(string dir)
+        public static async Task DeleteDirectoryOrJustGiveUp(string dir)
         {
             try {
                 await Utility.DeleteDirectory(dir);
             } catch (Exception ex) {
-                var message = String.Format("Uninstall failed to delete dir '{0}', punting to next reboot", dir);
-                LogHost.Default.WarnException(message, ex);
-
-                Utility.DeleteDirectoryAtNextReboot(dir);
+                var message = String.Format("Uninstall failed to delete dir '{0}': {1}", dir, ex);
             }
-        }
-
-        public static void DeleteDirectoryAtNextReboot(string directoryPath)
-        {
-            var di = new DirectoryInfo(directoryPath);
-
-            if (!di.Exists) {
-                Log().Warn("DeleteDirectoryAtNextReboot: does not exist - {0}", directoryPath);
-                return;
-            }
-
-            // NB: MoveFileEx blows up if you're a non-admin, so you always need a backup plan
-            di.GetFiles().ForEach(x => safeDeleteFileAtNextReboot(x.FullName));
-            di.GetDirectories().ForEach(x => DeleteDirectoryAtNextReboot(x.FullName));
-
-            safeDeleteFileAtNextReboot(directoryPath);
-        }
-
-        static void safeDeleteFileAtNextReboot(string name)
-        {
-            if (MoveFileEx(name, null, MoveFileFlags.MOVEFILE_DELAY_UNTIL_REBOOT)) return;
-
-            // Thank You, http://www.pinvoke.net/default.aspx/coredll.getlasterror
-            var lastError = Marshal.GetLastWin32Error();
-
-            Log().Error("safeDeleteFileAtNextReboot: failed - {0} - {1}", name, lastError);
         }
 
         public static void LogIfThrows(this IFullLogger This, LogLevel level, string message, Action block)

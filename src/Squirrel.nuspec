@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0"?>
 <package xmlns="http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd">
   <metadata>
-    <version>1.0.3</version>
+    <version>1.1.1</version>
     <authors>GitHub</authors>
     <owners>Paul Betts</owners>
     <licenseUrl>https://github.com/squirrel/Squirrel.Windows/blob/master/COPYING</licenseUrl>
@@ -29,5 +29,6 @@
     <file src="SyncReleases\bin\Release\SyncReleases.exe" target="tools" />
     <file src="Update\signtool.exe" target="tools\signtool.exe" />
     <file src="Update\rcedit.exe" target="tools\rcedit.exe" />
+    <file src="..\vendor\wix\*" target="tools" />
   </files>
 </package>
