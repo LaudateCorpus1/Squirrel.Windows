@@ -241,7 +241,7 @@ namespace Squirrel
                     this.Log().Info("Creating shortcut for {0} => {1}", exeName, file);
 
                     ShellLink sl;
-                    this.ErrorIfThrows(() => {
+                    this.WarnIfThrows(() => {
                         File.Delete(file);
 
                         sl = new ShellLink {
