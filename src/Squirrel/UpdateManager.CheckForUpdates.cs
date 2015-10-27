@@ -156,13 +156,13 @@ namespace Squirrel
                 var latestFullRelease = Utility.FindCurrentVersion(remoteReleases);
                 var currentRelease = Utility.FindCurrentVersion(localReleases);
 
-                if (latestFullRelease == currentRelease) {
-                    this.Log().Info("No updates, remote and local are the same");
-
+                if (currentRelease != null && latestFullRelease.Version <= currentRelease.Version)
+                {
+                    this.Log().Info("No updates");
                     var info = UpdateInfo.Create(currentRelease, new[] {latestFullRelease}, packageDirectory);
                     return info;
                 } else {
-                    this.Log().Info("Remote version differs from local");
+                    this.Log().Info("Remote version {0} differs from local {1}", latestFullRelease, currentRelease);
                 }
 
                 if (ignoreDeltaUpdates) {
