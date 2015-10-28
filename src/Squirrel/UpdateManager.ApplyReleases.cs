@@ -527,12 +527,9 @@ namespace Squirrel
 
             void updateLink(ShellLink shortcut, string newAppPath, bool newVersionExists)
             {
-                this.Log().Info("Processing shortcut '{0}'", shortcut.ShortCutFile);
-
                 string expectedStart = rootAppDirectory + "\\app-";
 
                 if (!shortcut.WorkingDirectory.StartsWith(expectedStart, StringComparison.OrdinalIgnoreCase)) {
-                    this.Log().Info("'{0}' is not in '{1}', skipping", shortcut.WorkingDirectory, rootAppDirectory);
                     return;
                 }
 
@@ -546,7 +543,7 @@ namespace Squirrel
                 shortcut.WorkingDirectory = updatePath(shortcut.WorkingDirectory, newAppPath);
                 shortcut.IconPath = updatePath(shortcut.IconPath, newAppPath);
 
-                this.Log().Info("Updating shortcut to {0}", shortcut.Target);
+                this.Log().Info("Updating shortcut {0}", shortcut.ShortCutFile);
                 shortcut.Save();
             }
 
