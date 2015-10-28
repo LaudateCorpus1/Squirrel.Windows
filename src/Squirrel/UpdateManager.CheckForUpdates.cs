@@ -159,7 +159,7 @@ namespace Squirrel
                 if (currentRelease != null && latestFullRelease.Version <= currentRelease.Version)
                 {
                     this.Log().Info("No updates");
-                    var info = UpdateInfo.Create(currentRelease, new[] {latestFullRelease}, packageDirectory);
+                    var info = UpdateInfo.Create(currentRelease, new[] { currentRelease }, packageDirectory);
                     return info;
                 } else {
                     this.Log().Info("Remote version {0} differs from local {1}", latestFullRelease, currentRelease);
@@ -171,12 +171,12 @@ namespace Squirrel
 
                 if (!localReleases.Any()) {
                     this.Log().Warn("First run or local directory is corrupt, starting from scratch");
-                    return UpdateInfo.Create(Utility.FindCurrentVersion(localReleases), new[] {latestFullRelease}, packageDirectory);
+                    return UpdateInfo.Create(currentRelease, new[] { latestFullRelease }, packageDirectory);
                 }
 
                 if (localReleases.Max(x => x.Version) > remoteReleases.Max(x => x.Version)) {
                     this.Log().Warn("hwhat, local version is greater than remote version");
-                    return UpdateInfo.Create(Utility.FindCurrentVersion(localReleases), new[] {latestFullRelease}, packageDirectory);
+                    return UpdateInfo.Create(currentRelease, new[] { latestFullRelease }, packageDirectory);
                 }
 
                 return UpdateInfo.Create(currentRelease, remoteReleases, packageDirectory);
