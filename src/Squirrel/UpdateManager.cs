@@ -198,13 +198,13 @@ namespace Squirrel
             // * We're Update.exe, running on initial install from SquirrelTemp
             // * We're a C# EXE with Squirrel linked in
 
-            var assembly = Assembly.GetEntryAssembly();
+            var assembly = Utility.GetAssembyLocation();
             if (assemblyLocation == null && assembly == null) {
                 // dunno lol
                 return Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             }
 
-            assemblyLocation = assemblyLocation ?? assembly.Location;
+            assemblyLocation = assemblyLocation ?? assembly;
 
             if (Path.GetFileName(assemblyLocation).Equals("update.exe", StringComparison.OrdinalIgnoreCase)) {
                 // NB: Both the "SquirrelTemp" case and the "App's folder" case 

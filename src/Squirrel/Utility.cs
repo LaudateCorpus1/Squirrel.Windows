@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics.Contracts;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Threading;
@@ -29,6 +30,37 @@ namespace Squirrel
             {
                 Debugger.Break();
             }
+        }
+
+        static List<string> PathSplit(string path)
+        {
+            List<string> pathParts = new List<string>(path.Split(Path.DirectorySeparatorChar));
+            if (Path.IsPathRooted(path))
+            {
+                pathParts[0] = pathParts[0] + Path.DirectorySeparatorChar;
+            }
+            return pathParts;
+        }
+
+        public static string GetAssembyLocation()
+        {
+            // if we are running in the debugger, then assume the assembly location is bogus,
+            // instead try to find update.exe in working dir or above.
+            if (Debugger.IsAttached)
+            {
+                string currDir = Environment.CurrentDirectory;
+                var pathParts = PathSplit(currDir);
+                for (int i = 0; i < pathParts.Count; ++i)
+                {
+                    string testPath = Path.Combine(Path.Combine(pathParts.ToArray()), "update.exe");
+                    if (File.Exists(testPath))
+                    {
+                        return testPath;
+                    }
+                    pathParts.RemoveAt(pathParts.Count - 1);
+                }
+            }
+            return Assembly.GetEntryAssembly().Location;
         }
 
         public static string RemoveByteOrderMarkerIfPresent(string content)

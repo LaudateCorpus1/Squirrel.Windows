@@ -773,7 +773,7 @@ namespace Squirrel.Update
 
         static string getAppNameFromDirectory(string path = null)
         {
-            path = path ?? Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            path = path ?? Path.GetDirectoryName(Utility.GetAssembyLocation());
             return (new DirectoryInfo(path)).Name;
         }
 
