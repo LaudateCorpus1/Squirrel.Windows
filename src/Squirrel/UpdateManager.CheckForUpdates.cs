@@ -162,7 +162,9 @@ namespace Squirrel
                     var info = UpdateInfo.Create(currentRelease, new[] { currentRelease }, packageDirectory);
                     return info;
                 } else {
-                    this.Log().Info("Remote version {0} differs from local {1}", latestFullRelease, currentRelease);
+                    var vold = currentRelease != null ? currentRelease.Version : null;
+                    var vnew = latestFullRelease != null ? latestFullRelease.Version : null;
+                    this.Log().Info("Remote version {0} differs from local {1}", vnew, vold);
                 }
 
                 if (ignoreDeltaUpdates) {

@@ -493,10 +493,25 @@ namespace Squirrel
                 Tuple<string, SearchOption>[] pathsToUpdate = { taskbarPath, startMenuPath, desktopPath };
 
                 foreach (var searchPath in pathsToUpdate) {
-                    var shellLinks = (new DirectoryInfo(searchPath.Item1)).GetFiles("*.lnk", searchPath.Item2)
-                        .Select(resolveLink)
-                        .Where(x => x != null)
-                        .ToArray();
+                    // if there is no dir there, skip it
+                    if (!Directory.Exists(searchPath.Item1)) {
+                        this.Log().Warn("Skipping {0}, since it does not exist!", searchPath.Item1);
+                        continue;
+                    }
+
+                    ShellLink[] shellLinks;
+                    try {
+                        shellLinks = (new DirectoryInfo(searchPath.Item1)).GetFiles("*.lnk", searchPath.Item2)
+                            .Select(resolveLink)
+                            .Where(x => x != null)
+                            .ToArray();
+                    }
+                    catch (Exception ex)
+                    {
+                        var message = String.Format("fixPinnedExecutables: enumerating path {0} failed", searchPath.Item1);
+                        this.Log().WarnException(message, ex);
+                        continue;
+                    }
 
                     foreach (var shortcut in shellLinks) {
                         try {
