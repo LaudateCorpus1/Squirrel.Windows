@@ -23,11 +23,11 @@ using Microsoft.Win32;
 namespace Squirrel.Update
 {
     enum UpdateAction {
-        Unset = 0, Install, Uninstall, Download, Update, Releasify, Shortcut, 
-        Deshortcut, ProcessStart, UpdateSelf, CheckForUpdates,
+        Unset = 0, Install, Uninstall, Download, Update, Releasify, Shortcut,
+        Deshortcut, ProcessStart, UpdateSelf, CheckForUpdates, InstallOmaha,
     }
 
-    class Program : IEnableLogger 
+    class Program : IEnableLogger
     {
         static OptionSet opts;
 
@@ -48,7 +48,7 @@ namespace Squirrel.Update
         {
             Console.WriteLine("Starting Update.exe");
 
-            // NB: Trying to delete the app directory while we have Setup.log 
+            // NB: Trying to delete the app directory while we have Setup.log
             // open will actually crash the uninstaller
             bool isUninstalling = args.Any(x => x.Contains("uninstall"));
 
@@ -75,7 +75,7 @@ namespace Squirrel.Update
             // the update.exe as RUNASADMIN, then squirrel would lose its mind. This clears out any such flags
             // on any executables in the tree, intended to be run before an install or update, and presumably
             // and app that requires such flags could set them again during the install/update callbacks.
- 
+
             var parentKey = RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, RegistryView.Default)
                 .OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers", true);
 
@@ -140,6 +140,7 @@ namespace Squirrel.Update
                     { "updateSelf=", "Copy the currently executing Update.exe into the default location", v => { updateAction =  UpdateAction.UpdateSelf; target = v; } },
                     { "processStart=", "Start an executable in the latest version of the app package", v => { updateAction =  UpdateAction.ProcessStart; processStart = v; }, true},
                     { "processStartAndWait=", "Start an executable in the latest version of the app package", v => { updateAction =  UpdateAction.ProcessStart; processStart = v; shouldWait = true; }, true},
+                    { "omaha=", "Install the app whose package is in the specified directory (Omaha version)", v => { updateAction = UpdateAction.InstallOmaha; target = v; } },
                     "",
                     "Options:",
                     { "h|?|help", "Display Help and exit", _ => {} },
@@ -170,15 +171,21 @@ namespace Squirrel.Update
                 }
 
                 switch (updateAction) {
-                case UpdateAction.Install:
+                case UpdateAction.Install: {
                     var progressSource = new ProgressSource();
-                    if (!silentInstall) { 
+                    if (!silentInstall) {
                         AnimatedGifWindow.ShowWindow(TimeSpan.FromSeconds(4), animatedGifWindowToken.Token, progressSource);
                     }
 
                     Install(silentInstall, progressSource, Path.GetFullPath(target)).Wait();
                     animatedGifWindowToken.Cancel();
                     break;
+                }
+                case UpdateAction.InstallOmaha: {
+                    var progressSource = new ProgressSource();
+                    InstallOmaha(progressSource, Path.GetFullPath(target)).Wait();
+                    break;
+                }
                 case UpdateAction.Uninstall:
                     Uninstall().Wait();
                     break;
@@ -245,7 +252,7 @@ namespace Squirrel.Update
                     this.ErrorIfThrows(() => Utility.Retry(() => Directory.CreateDirectory(mgr.RootAppDirectory), 3),
                         "Couldn't recreate app directory, perhaps Antivirus is blocking it");
                 }
- 
+
                 Directory.CreateDirectory(mgr.RootAppDirectory);
 
                 var updateTarget = Path.Combine(mgr.RootAppDirectory, "Update.exe");
@@ -253,6 +260,45 @@ namespace Squirrel.Update
                     "Failed to copy Update.exe to " + updateTarget);
 
                 await mgr.FullInstall(silentInstall, progressSource.Raise);
+
+                await this.ErrorIfThrows(() => mgr.CreateUninstallerRegistryEntry(),
+                    "Failed to create uninstaller registry entry");
+            }
+        }
+
+        public async Task InstallOmaha(ProgressSource progressSource, string sourceDirectory = null)
+        {
+            sourceDirectory = sourceDirectory ?? Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            var releasesPath = Path.Combine(sourceDirectory, "RELEASES");
+
+            this.Log().Info("Starting install, writing to {0}", sourceDirectory);
+
+            if (!File.Exists(releasesPath)) {
+                this.Log().Info("RELEASES doesn't exist, creating it at " + releasesPath);
+                var nupkgs = (new DirectoryInfo(sourceDirectory)).GetFiles()
+                    .Where(x => x.Name.EndsWith(".nupkg", StringComparison.OrdinalIgnoreCase))
+                    .Select(x => ReleaseEntry.GenerateFromFile(x.FullName));
+
+                ReleaseEntry.WriteReleaseFile(nupkgs, releasesPath);
+            }
+
+            var ourAppName = ReleaseEntry.ParseReleaseFile(File.ReadAllText(releasesPath, Encoding.UTF8))
+                .First().PackageName;
+
+            using (var mgr = new UpdateManager(sourceDirectory, ourAppName)) {
+                this.Log().Info("About to install to: " + mgr.RootAppDirectory);
+
+                this.ClearAllCompatibilityFlags(mgr.RootAppDirectory);
+
+                if (!Directory.Exists(mgr.RootAppDirectory)) {
+                    Directory.CreateDirectory(mgr.RootAppDirectory);
+                }
+
+                var updateTarget = Path.Combine(mgr.RootAppDirectory, "Update.exe");
+                this.ErrorIfThrows(() => File.Copy(Assembly.GetExecutingAssembly().Location, updateTarget, true),
+                    "Failed to copy Update.exe to " + updateTarget);
+
+                await mgr.FullInstall(true, progressSource.Raise);
 
                 await this.ErrorIfThrows(() => mgr.CreateUninstallerRegistryEntry(),
                     "Failed to create uninstaller registry entry");
@@ -527,7 +573,7 @@ namespace Squirrel.Update
             var releases = ReleaseEntry.ParseReleaseFile(
                 File.ReadAllText(Utility.LocalReleaseFileForAppDir(appDir), Encoding.UTF8));
 
-            // NB: We add the hacked up version in here to handle a migration 
+            // NB: We add the hacked up version in here to handle a migration
             // issue, where versions of Squirrel pre PR #450 will not understand
             // prerelease tags, so it will end up writing the release name sans
             // tags. However, the RELEASES file _will_ have them, so we need to look
@@ -543,7 +589,7 @@ namespace Squirrel.Update
 
             // Check for the EXE name they want
             var targetExe = new FileInfo(Path.Combine(latestAppDir, exeName));
-            
+
             // Check for path canonicalization attacks
             if (!targetExe.FullName.StartsWith(latestAppDir, StringComparison.Ordinal)) {
                 this.Log().Error("Want to launch '{0}', but it is not in {1}", targetExe, latestAppDir);
@@ -655,7 +701,7 @@ namespace Squirrel.Update
 
             if (processResult.Item1 != 0) {
                 var msg = String.Format(
-                    "Failed to sign, command invoked was: '{0} sign {1} {2}'", 
+                    "Failed to sign, command invoked was: '{0} sign {1} {2}'",
                     exe, signingOpts, exePath);
                 throw new Exception(msg);
             } else {
@@ -694,7 +740,7 @@ namespace Squirrel.Update
 
             if (processResult.Item1 != 0) {
                 var msg = String.Format(
-                    "Failed to modify resources, command invoked was: '{0} {1}'\n\nOutput was:\n{2}", 
+                    "Failed to modify resources, command invoked was: '{0} {1}'\n\nOutput was:\n{2}",
                     exe, args, processResult.Item2);
 
                 throw new Exception(msg);
@@ -726,7 +772,7 @@ namespace Squirrel.Update
 
             if (processResult.Item1 != 0) {
                 var msg = String.Format(
-                    "Failed to compile WiX template, command invoked was: '{0} {1}'\n\nOutput was:\n{2}", 
+                    "Failed to compile WiX template, command invoked was: '{0} {1}'\n\nOutput was:\n{2}",
                     "candle.exe", candleParams, processResult.Item2);
 
                 throw new Exception(msg);
@@ -738,7 +784,7 @@ namespace Squirrel.Update
 
             if (processResult.Item1 != 0) {
                 var msg = String.Format(
-                    "Failed to link WiX template, command invoked was: '{0} {1}'\n\nOutput was:\n{2}", 
+                    "Failed to link WiX template, command invoked was: '{0} {1}'\n\nOutput was:\n{2}",
                     "light.exe", lightParams, processResult.Item2);
 
                 throw new Exception(msg);
@@ -755,7 +801,7 @@ namespace Squirrel.Update
 
         static string pathToWixTools()
         {
-            var ourPath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location); 
+            var ourPath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
 
             // Same Directory? (i.e. released)
             if (File.Exists(Path.Combine(ourPath, "candle.exe"))) {
