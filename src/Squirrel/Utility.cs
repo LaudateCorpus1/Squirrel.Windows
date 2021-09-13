@@ -342,7 +342,7 @@ namespace Squirrel
             return Disposable.Create(() => File.Delete(thePath));
         }
 
-        public static async Task DeleteDirectory(string directoryPath, bool moveFirst = true)
+        public static async Task DeleteDirectory(string directoryPath, bool moveFirst = false)
         {
             Contract.Requires(!String.IsNullOrEmpty(directoryPath));
 
@@ -394,7 +394,7 @@ namespace Squirrel
             });
 
             var directoryOperations =
-                dirs.ForEachAsync(async dir => await DeleteDirectory(dir, false));
+                dirs.ForEachAsync(async dir => await DeleteDirectory(dir));
 
             await Task.WhenAll(fileOperations, directoryOperations);
 
@@ -408,10 +408,15 @@ namespace Squirrel
                 Log().ErrorException(message, ex);
                 if (moveFirst) {
                     // move back to original name so we can try again on the next run
-                    Directory.Move(directoryPath, originalPath);
+                    try {
+                        Directory.Move(directoryPath, originalPath);
+                    } catch (Exception moveEx) {
+                        Log().ErrorException(
+                            String.Format("DeleteDirectory: Failed to restore name to {0} from {1}", originalPath, directoryPath),
+                            moveEx
+                        );
+                    }
                 }
-                
-                throw ex;
             }
         }
 

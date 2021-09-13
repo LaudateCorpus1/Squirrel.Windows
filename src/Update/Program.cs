@@ -239,7 +239,7 @@ namespace Squirrel.Update
                 if (Directory.Exists(mgr.RootAppDirectory)) {
                     this.Log().Warn("Install path {0} already exists, burning it to the ground", mgr.RootAppDirectory);
 
-                    await this.ErrorIfThrows(() => Utility.DeleteDirectory(mgr.RootAppDirectory),
+                    await this.ErrorIfThrows(() => Utility.DeleteDirectory(mgr.RootAppDirectory, true),
                         "Failed to remove existing directory on full install, is the app still running???");
 
                     this.ErrorIfThrows(() => Utility.Retry(() => Directory.CreateDirectory(mgr.RootAppDirectory), 3),
