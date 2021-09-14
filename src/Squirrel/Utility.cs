@@ -342,7 +342,7 @@ namespace Squirrel
             return Disposable.Create(() => File.Delete(thePath));
         }
 
-        public static async Task DeleteDirectory(string directoryPath)
+        public static async Task DeleteDirectory(string directoryPath, bool moveFirst = false)
         {
             Contract.Requires(!String.IsNullOrEmpty(directoryPath));
 
@@ -352,6 +352,24 @@ namespace Squirrel
                 Log().Warn("DeleteDirectory: does not exist - {0}", directoryPath);
                 return;
             }
+            var originalPath = "";
+            if (moveFirst) {
+                // We want directory deletion to be relatively atomic
+                // either delete the whole tree or nothing at all
+                // Unfortunately, there doesn't seem to be a great way to do that
+                // So we do the next best thing, we rename the directory and then delete it
+                // If any of the files inside are locked, the move will fail
+                // After the directory is renamed, any attempts to access files at the old path
+                // will also fail, making it less likely for them to be locked mid-deletion
+                if (directoryPath.Last() == Path.DirectorySeparatorChar) {
+                    directoryPath = directoryPath.Remove(directoryPath.Length - 1);
+                }
+                var parent = Path.GetDirectoryName(directoryPath);
+                originalPath = directoryPath;
+                directoryPath = parent + Path.DirectorySeparatorChar + "tmp" + Path.GetRandomFileName ();
+                Directory.Move(originalPath, directoryPath);
+            }
+            
 
             // From http://stackoverflow.com/questions/329355/cannot-delete-directory-with-directory-deletepath-true/329502#329502
             var files = new string[0];
@@ -388,6 +406,17 @@ namespace Squirrel
             } catch (Exception ex) {
                 var message = String.Format("DeleteDirectory: could not delete - {0}", directoryPath);
                 Log().ErrorException(message, ex);
+                if (moveFirst) {
+                    // move back to original name so we can try again on the next run
+                    try {
+                        Directory.Move(directoryPath, originalPath);
+                    } catch (Exception moveEx) {
+                        Log().ErrorException(
+                            String.Format("DeleteDirectory: Failed to restore name to {0} from {1}", originalPath, directoryPath),
+                            moveEx
+                        );
+                    }
+                }
             }
         }
 
